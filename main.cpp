@@ -1,4 +1,3 @@
-#include "hrrn.h"
 #include "fcfs.h"
 #include "testsets.h"
 #include "sjf.h"
@@ -6,12 +5,14 @@
 #include "rr.h"
 #include "priority.h"
 #include "mlfq.h"
+#include "hrrn.h"
 #include "simulator.h"
 
 #include <iostream>
 #include <iomanip>
 #include <vector>
 #include <memory>
+#include <string>
 
 std::vector<Process> makeTestSet() {
   std::vector<Process> procs;
@@ -59,6 +60,28 @@ std::vector<Process> makeIoTestSet() {
   return procs;
 }
 
+std::vector<Process> makeConvoySet() {
+  std::vector<Process> procs;
+  auto add = [&](int pid, const std::string& name, std::uint64_t arrival,
+                 std::uint64_t burst, int priority,
+                 std::vector<IoBlock> io = {}) {
+    Process p;
+    p.pid = pid; p.name = name;
+    p.arrivalTime = arrival;
+    p.burstTime = burst;
+    p.remainingTime = burst;
+    p.priority = priority;
+    p.dynamicPriority = priority;
+    p.ioBlocks = std::move(io);
+    procs.push_back(p);
+  };
+  add(1, "CPU1", 0, 20, 2);
+  add(2, "IO1",  1,  6, 1, {{1, 4}, {2, 4}, {3, 4}, {4, 4}, {5, 4}});
+  add(3, "IO2",  2,  6, 1, {{1, 4}, {2, 4}, {3, 4}, {4, 4}, {5, 4}});
+  add(4, "CPU2", 3, 12, 3);
+  return procs;
+}
+
 std::vector<Process> makeHrrnTestSet() {
   std::vector<Process> procs;
   auto add = [&](int pid, const std::string& name, std::uint64_t arrival,
@@ -79,7 +102,6 @@ std::vector<Process> makeHrrnTestSet() {
   return procs;
 }
 
-
 void printResult(const SimResult& r) {
   std::cout << std::left << std::setw(30) << r.algorithm
             << " | wait=" << std::setw(7) << std::fixed << std::setprecision(2) << r.avgWaiting
@@ -96,7 +118,7 @@ void printGantt(const SimResult& r) {
   for (auto& [pid, span] : r.gantt) {
     std::cout << "  [" << span.first << "-" << span.second << ") ";
     if (pid == -1) std::cout << "IDLE\n";
-else if (pid == -2) std::cout << "CS\n"; // ВСТАВЛЕНО ДЛЯ ЗАДАНИЯ 4
+    else if (pid == -2) std::cout << "CS\n";
     else std::cout << "P" << pid << "\n";
   }
   std::cout << "\n";
@@ -132,47 +154,35 @@ int main() {
     for (auto& s : scheds) printResult(runSimulation(*s));
   }
 
-  std::cout << "\n";
+  std::cout << "\nПо процессам, RR (q=2):\n";
   {
     auto set = makeTestSet();
     RrScheduler rr(set, 2);
-    SimResult r = runSimulation(rr);
-    std::cout << "\nПо процессам, RR (q=2):\n";
-  printProcessTable(rr.processes());
+    runSimulation(rr);
+    printProcessTable(rr.processes());
   }
-	// ВСТАВЛЕНО ДЛЯ ЗАДАНИЯ 13
-  // ==========================================
+
   {
     auto set = makeTestSet();
     saveSet("set_basic.txt", set);
-
     std::vector<Process> loaded;
-    if (!loadSet("set_basic.txt", loaded)) {
-      std::cerr << "Не удалось загрузить set_basic.txt\n";
-      return 1;
-    }
+    loadSet("set_basic.txt", loaded);
     FcfsScheduler a(set), b(loaded);
-    std::cout << "\nПроверка Задания 13 (Строки ниже должны полностью совпасть):\n";
+    std::cout << "\nПроверка Задания 13:\n";
     printResult(runSimulation(a));
     printResult(runSimulation(b));
   }
-  // ==========================================
-	// ВСТАВЛЕНО ДЛЯ ЗАДАНИЯ 3 (HRRN)
-  // ==========================================
+
   std::cout << "\nCase 3: SJF vs HRRN comparison\n";
   {
     auto hrrn_set1 = makeHrrnTestSet();
     auto hrrn_set2 = makeHrrnTestSet();
-
     SjfScheduler sjf(hrrn_set1);
     HrrnScheduler hrrn(hrrn_set2);
-
     printResult(runSimulation(sjf));
     printResult(runSimulation(hrrn));
   }
-  // ==========================================
-  // ВСТАВЛЕНО ДЛЯ ЗАДАНИЯ 4 (Context Switch Overhead)
-  // ==========================================
+
   std::cout << "\nCase 4: Context Switch Overhead (cost=1)\n";
   {
     auto set = makeTestSet();
@@ -180,27 +190,52 @@ int main() {
     RrScheduler rr2(set, 2);
     RrScheduler rr4(set, 4);
     RrScheduler rr8(set, 8);
+    printResult(runSimulation(rr1, 100000, 1));
+    printResult(runSimulation(rr2, 100000, 1));
+    printResult(runSimulation(rr4, 100000, 1));
+    printResult(runSimulation(rr8, 100000, 1));
+  }
 
-    std::cout << "RR (q=1) with cost=1:\n"; printResult(runSimulation(rr1, 100000, 1));
-    std::cout << "RR (q=2) with cost=1:\n"; printResult(runSimulation(rr2, 100000, 1));
-    std::cout << "RR (q=4) with cost=1:\n"; printResult(runSimulation(rr4, 100000, 1));
-    std::cout << "RR (q=8) with cost=1:\n"; printResult(runSimulation(rr8, 100000, 1));
+  {
+    auto set = makeTestSet();
+    std::cout << "\nВлияние кванта в RR (набор makeTestSet)\n";
+    std::cout << "q   wait   turn   resp   CS\n";
+    for (std::uint64_t q : {1, 2, 4, 8, 16}) {
+      RrScheduler rr(set, q);
+      SimResult r = runSimulation(rr);
+      std::cout << std::setw(2) << q << "  " << std::fixed << std::setprecision(2)
+                << r.avgWaiting << "  " << r.avgTurnaround << "  " << r.avgResponse
+                << "  " << std::setw(3) << r.contextSwitches << "  "
+                << std::string(r.contextSwitches, '#') << "\n";
+    }
   }
+
   // ==========================================
- // zad5
-{
-  auto set = makeTestSet();
-  std::cout << "\nВлияние кванта в RR (набор makeTestSet)\n";
-  std::cout << "q   wait   turn   resp   CS\n";
-  for (std::uint64_t q : {1, 2, 4, 8, 16}) {
-    RrScheduler rr(set, q);
-    SimResult r = runSimulation(rr);
-    std::cout << std::setw(2) << q << "  " << std::fixed << std::setprecision(2)
-              << r.avgWaiting << "  " << r.avgTurnaround << "  " << r.avgResponse
-              << "  " << std::setw(3) << r.contextSwitches << "  "
-              << std::string(r.contextSwitches, '#') << "\n";
+  // ИСПРАВЛЕНО И РАСШИРЕНО ДЛЯ ЗАДАНИЯ 6
+  // ==========================================
+  std::cout << "\nCase 6: Convoy Effect Analysis\n";
+  {
+    auto set = makeConvoySet();
+    
+    FcfsScheduler fcfs(set);
+    SrtnScheduler srtn(set);
+    RrScheduler rr4(set, 4);
+    PriorityScheduler prio(set, true, true);
+    MlfqScheduler mlfq(set);
+
+    std::cout << "\n--- Сводные результаты алгоритмов ---\n";
+    printResult(runSimulation(fcfs));
+    printResult(runSimulation(srtn));
+    printResult(runSimulation(rr4));
+    printResult(runSimulation(prio));
+    printResult(runSimulation(mlfq));
+
+    std::cout << "\n--- Таблица по процессам: FCFS ---\n";
+    printProcessTable(fcfs.processes());
+
+    std::cout << "\n--- Таблица по процессам: MLFQ ---\n";
+    printProcessTable(mlfq.processes());
   }
-}
-// zad5
+
   return 0;
 }
