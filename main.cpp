@@ -1,4 +1,5 @@
 #include "fcfs.h"
+#include "testsets.h"
 #include "sjf.h"
 #include "srtn.h"
 #include "rr.h"
@@ -113,7 +114,8 @@ int main() {
     auto set = makeTestSet();
     RrScheduler rr(set, 2);
     SimResult r = runSimulation(rr);
-    printGantt(r);
+    std::cout << "\nПо процессам, RR (q=2):\n";
+  printProcessTable(rr.processes());
   }
 
   return 0;
