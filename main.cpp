@@ -1,3 +1,4 @@
+#include "hrrn.h"
 #include "fcfs.h"
 #include "testsets.h"
 #include "sjf.h"
@@ -58,6 +59,27 @@ std::vector<Process> makeIoTestSet() {
   return procs;
 }
 
+std::vector<Process> makeHrrnTestSet() {
+  std::vector<Process> procs;
+  auto add = [&](int pid, const std::string& name, std::uint64_t arrival,
+                 std::uint64_t burst, int priority) {
+    Process p;
+    p.pid = pid; p.name = name;
+    p.arrivalTime = arrival;
+    p.burstTime = burst;
+    p.remainingTime = burst;
+    p.priority = priority;
+    p.dynamicPriority = priority;
+    procs.push_back(p);
+  };
+  add(1, "A",  0, 4, 1);
+  add(2, "L",  1, 6, 1);
+  add(3, "S1", 4, 2, 1);
+  add(4, "S2", 5, 1, 1);
+  return procs;
+}
+
+
 void printResult(const SimResult& r) {
   std::cout << std::left << std::setw(30) << r.algorithm
             << " | wait=" << std::setw(7) << std::fixed << std::setprecision(2) << r.avgWaiting
@@ -74,6 +96,7 @@ void printGantt(const SimResult& r) {
   for (auto& [pid, span] : r.gantt) {
     std::cout << "  [" << span.first << "-" << span.second << ") ";
     if (pid == -1) std::cout << "IDLE\n";
+else if (pid == -2) std::cout << "CS\n"; // ВСТАВЛЕНО ДЛЯ ЗАДАНИЯ 4
     else std::cout << "P" << pid << "\n";
   }
   std::cout << "\n";
@@ -134,5 +157,36 @@ int main() {
     printResult(runSimulation(b));
   }
   // ==========================================
+	// ВСТАВЛЕНО ДЛЯ ЗАДАНИЯ 3 (HRRN)
+  // ==========================================
+  std::cout << "\nCase 3: SJF vs HRRN comparison\n";
+  {
+    auto hrrn_set1 = makeHrrnTestSet();
+    auto hrrn_set2 = makeHrrnTestSet();
+
+    SjfScheduler sjf(hrrn_set1);
+    HrrnScheduler hrrn(hrrn_set2);
+
+    printResult(runSimulation(sjf));
+    printResult(runSimulation(hrrn));
+  }
+  // ==========================================
+  // ВСТАВЛЕНО ДЛЯ ЗАДАНИЯ 4 (Context Switch Overhead)
+  // ==========================================
+  std::cout << "\nCase 4: Context Switch Overhead (cost=1)\n";
+  {
+    auto set = makeTestSet();
+    RrScheduler rr1(set, 1);
+    RrScheduler rr2(set, 2);
+    RrScheduler rr4(set, 4);
+    RrScheduler rr8(set, 8);
+
+    std::cout << "RR (q=1) with cost=1:\n"; printResult(runSimulation(rr1, 100000, 1));
+    std::cout << "RR (q=2) with cost=1:\n"; printResult(runSimulation(rr2, 100000, 1));
+    std::cout << "RR (q=4) with cost=1:\n"; printResult(runSimulation(rr4, 100000, 1));
+    std::cout << "RR (q=8) with cost=1:\n"; printResult(runSimulation(rr8, 100000, 1));
+  }
+  // ==========================================
+
   return 0;
 }

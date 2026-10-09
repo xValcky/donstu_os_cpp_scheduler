@@ -1,6 +1,6 @@
 #include "simulator.h"
 
-SimResult runSimulation(Scheduler& sched, std::uint64_t maxTicks) {
+SimResult runSimulation(Scheduler& sched, std::uint64_t maxTicks, std::uint64_t switchCost) {
   SimResult res;
   res.algorithm = sched.name();
 
@@ -8,6 +8,10 @@ SimResult runSimulation(Scheduler& sched, std::uint64_t maxTicks) {
   int currentPid = -1;
   int prevPid = -1;
   std::uint64_t busyTicks = 0;
+  
+  // Переменные для Задания 4
+  std::uint64_t switchLeft = 0;
+  std::uint64_t overheadTicks = 0;
 
   auto& procs = sched.processes();
 
@@ -19,7 +23,6 @@ SimResult runSimulation(Scheduler& sched, std::uint64_t maxTicks) {
         sched.onProcessReady(p.pid, tick);
       }
     }
-
 
     // 3. Все ли завершены?
     bool allDone = true;
@@ -49,22 +52,31 @@ SimResult runSimulation(Scheduler& sched, std::uint64_t maxTicks) {
         if (p) {
           if (!p->started) {
             p->started = true;
-		p->startTime = tick;
+            p->startTime = tick;
             p->responseTime = tick - p->arrivalTime;
           }
           p->state = ProcessState::RUNNING;
           p->contextSwitches++;
-          if (prevPid != currentPid) res.contextSwitches++;
+          
+          // Изменено для Задания 4: если процесс сменился, взводим таймер штрафа
+          if (prevPid != currentPid) {
+            res.contextSwitches++;
+            switchLeft = switchCost; 
+          }
         }
       }
     }
 
-    // 7. Выполняем один такт
+    // 7. Выполняем один такт (или тратим его на переключение контекста)
     int ranPid = -1;
-    if (currentPid != -1) {
+    bool overheadTick = (currentPid != -1 && switchLeft > 0);
+
+    if (overheadTick) {
+      switchLeft--;
+      overheadTicks++;
+    } else if (currentPid != -1) {
       Process* p = sched.find(currentPid);
       if (p) {
-        // запомним, кто реально выполнялся в этом такте
         ranPid = currentPid;
 
         p->remainingTime--;
@@ -92,15 +104,21 @@ SimResult runSimulation(Scheduler& sched, std::uint64_t maxTicks) {
       }
     }
 
-// 7a. Все, кто остался в READY, ждали этот такт
+    // 7a. Все, кто остался в READY, ждали этот такт
     for (auto& p : procs) {
       if (p.state == ProcessState::READY) {
         p.waitingTime++;
       }
     }
 
-    // 8. Запись в диаграмму Ганта (по фактически выполнявшемуся процессу)
-    if (ranPid != -1) {
+    // 8. Запись в диаграмму Ганта (с учетом тактов переключения контекста)
+    if (overheadTick) {
+      if (!res.gantt.empty() && res.gantt.back().first == -2) {
+        res.gantt.back().second.second = tick + 1;
+      } else {
+        res.gantt.push_back({-2, {tick, tick + 1}});
+      }
+    } else if (ranPid != -1) {
       if (!res.gantt.empty() && res.gantt.back().first == ranPid) {
         res.gantt.back().second.second = tick + 1;
       } else {
@@ -121,7 +139,8 @@ SimResult runSimulation(Scheduler& sched, std::uint64_t maxTicks) {
       }
     }
 
-    prevPid = ranPid;
+    // Если был такт переключения контекста, сохраняем виртуальный ИД процесса
+    prevPid = overheadTick ? currentPid : ranPid;
     tick++;
   }
 
@@ -144,6 +163,10 @@ SimResult runSimulation(Scheduler& sched, std::uint64_t maxTicks) {
   res.totalTicks = tick;
   res.cpuUtilization = tick > 0 ? 100.0 * busyTicks / tick : 0.0;
   res.throughput = finished;
+  
+  // Сохраняем новые метрики Задания 4
+  res.overheadTicks = overheadTicks;
+  res.overheadPercent = tick > 0 ? 100.0 * overheadTicks / tick : 0.0;
 
   return res;
 }
