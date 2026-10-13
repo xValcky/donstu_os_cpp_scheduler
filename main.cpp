@@ -8,11 +8,77 @@
 #include "hrrn.h"
 #include "simulator.h"
 
+#include <functional>
 #include <iostream>
 #include <iomanip>
 #include <vector>
 #include <memory>
 #include <string>
+
+// Сравнение алгоритмов на 5 наборах. Заголовки по-английски: setw считает байты UTF-8
+using Factory = std::function<std::unique_ptr<Scheduler>(const std::vector<Process>&)>;
+
+template <class T, class... Args>
+Factory factory(Args... args) {
+  return [=](const std::vector<Process>& s) { return std::make_unique<T>(s, args...); };
+}
+
+// Перечисление для выбора выводимой метрики
+enum class Metric {
+  Waiting,
+  Turnaround,
+  Response,
+  Cpu
+};
+
+void printMetricTable(Metric metric, const std::string& title, const std::vector<std::pair<std::string, Factory>>& algos) {
+  const int sizes[5] = {12, 14, 16, 18, 20};
+
+  std::cout << "\n=== " << title << " ===\n";
+  std::cout << std::left << std::setw(12) << "Algorithm" << std::right;
+  for (int i = 1; i <= 5; ++i) std::cout << std::setw(9) << "set " + std::to_string(i);
+  std::cout << std::setw(9) << "average" << "\n";
+
+  for (auto& [label, make] : algos) {
+    std::cout << std::left << std::setw(12) << label << std::right;
+    double sum = 0;
+    for (unsigned seed = 1; seed <= 5; ++seed) {
+      auto set = makeRandomSet(seed, sizes[seed - 1]);
+      auto sched = make(set);
+      SimResult r = runSimulation(*sched);
+      
+      // Выбираем, какое именно поле выводить на основе переданной метрики
+      double val = 0;
+      if (metric == Metric::Waiting)     val = r.avgWaiting;
+      if (metric == Metric::Turnaround)  val = r.avgTurnaround;
+      if (metric == Metric::Response)    val = r.avgResponse;
+      if (metric == Metric::Cpu)         val = r.cpuUtilization; // Загрузка CPU в процентах
+
+      sum += val;
+      std::cout << std::setw(9) << std::fixed << std::setprecision(2) << val;
+    }
+    std::cout << std::setw(9) << sum / 5 << "\n";
+  }
+}
+
+void runExperiment10() {
+  std::vector<std::pair<std::string, Factory>> algos = {
+    {"FCFS",       factory<FcfsScheduler>()},
+    {"SJF",        factory<SjfScheduler>()},
+    {"SRTN",       factory<SrtnScheduler>()},
+    {"HRRN",       factory<HrrnScheduler>()},
+    {"RR q=4",     factory<RrScheduler>(4)},
+    {"Prio",       factory<PriorityScheduler>(false, false)},
+    {"Prio+aging", factory<PriorityScheduler>(true, true)},
+    {"MLFQ",       factory<MlfqScheduler>()},
+  };
+
+  // Вызываем по очереди для каждой из 4 метрик
+  printMetricTable(Metric::Waiting,    "Average Waiting Time", algos);
+  printMetricTable(Metric::Turnaround, "Average Turnaround Time", algos);
+  printMetricTable(Metric::Response,   "Average Response Time", algos);
+  printMetricTable(Metric::Cpu,        "CPU Utilization (%)", algos);
+}
 
 std::vector<Process> makeTestSet() {
   std::vector<Process> procs;
@@ -236,6 +302,26 @@ int main() {
     std::cout << "\n--- Таблица по процессам: MLFQ ---\n";
     printProcessTable(mlfq.processes());
   }
+	std::cout<< "\nRunExperiment ---";
+ 	{
+	// Код для генерации и сохранения 5 наборов процессов
+const int sizes[5] = {12, 14, 16, 18, 20};
+for (unsigned seed = 1; seed <= 5; ++seed) {
+    // Генерируем случайный набор
+    auto set = makeRandomSet(seed, sizes[seed - 1]);
+    
+    // Формируем путь: "sets/set1.txt", "sets/set2.txt" и т.д.
+    std::string filepath = "sets/set" + std::to_string(seed) + ".txt";
+    
+    // Сохраняем набор в файл
+    if (!saveSet(filepath, set)) {
+        std::cerr << "Не удалось сохранить файл: " << filepath << std::endl;
+        return 1;
+    }
+}
+	runExperiment10();
+	}
+
 
   return 0;
 }
