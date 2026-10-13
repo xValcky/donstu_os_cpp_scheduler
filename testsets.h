@@ -9,6 +9,21 @@
 #include <sstream>
 #include <string>
 #include <vector>
+
+
+// Диаграмма Ганта в CSV: pid,start,end (pid -1 = простой, -2 = переключение контекста)
+inline bool saveGanttCsv(const std::string& path, const SimResult& r) {
+  std::ofstream out(path);
+  if (!out) return false;
+  out << "pid,start,end\n";
+  for (const auto& g : r.gantt) {
+    out << g.first << ',' << g.second.first << ',' << g.second.second << '\n';
+  }
+  return true;
+}
+
+
+
 // Таблица по каждому процессу (вызывать после runSimulation)
 inline void printProcessTable(const std::vector<Process>& procs) {
   std::cout << std::left << std::setw(6) << "Proc" << std::right

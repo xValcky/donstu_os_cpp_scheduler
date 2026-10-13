@@ -321,7 +321,13 @@ for (unsigned seed = 1; seed <= 5; ++seed) {
 }
 	runExperiment10();
 	}
-
+	{
+  auto set = makeTestSet();
+  RrScheduler rr(set, 2);
+  saveGanttCsv("results/gantt_rr2.csv", runSimulation(rr));
+  MlfqScheduler mlfq(set);
+  saveGanttCsv("results/gantt_mlfq.csv", runSimulation(mlfq));
+}
 
   return 0;
 }
