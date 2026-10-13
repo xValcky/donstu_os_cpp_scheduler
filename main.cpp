@@ -1,4 +1,5 @@
 #include "fcfs.h"
+#include "edf.h"
 #include "testsets.h"
 #include "sjf.h"
 #include "srtn.h"
@@ -17,6 +18,42 @@
 
 // Объявление многоядерного симулятора из multicore.cpp
 SimResult runSimulationMulti(Scheduler& sched, int cores, std::uint64_t maxTicks);
+
+// Функция проверки дедлайнов (Шаг 2 методички)
+void printDeadlines(const std::vector<Process>& procs) {
+  for (const auto& p : procs) {
+    std::cout << "  " << p.name << ": finish=" << p.finishTime 
+              << " deadline=" << p.deadline
+              << (p.finishTime <= p.deadline ? "  OK" : "  MISSED") << "\n";
+  }
+}
+
+// Генератор наборов данных для тестирования EDF
+std::vector<Process> makeDeadlineSet(bool feasible) {
+  std::vector<Process> v;
+  auto add = [&](int pid, const std::string& name, std::uint64_t arrival,
+                 std::uint64_t burst, std::uint64_t deadline) {
+    Process p;
+    p.pid = pid; p.name = name;
+    p.arrivalTime = arrival;
+    p.burstTime = burst;
+    p.remainingTime = burst;
+    p.deadline = deadline;
+    v.push_back(p);
+  };
+  if (feasible) {
+    add(1, "E1", 0, 3, 7);
+    add(2, "E2", 1, 2, 4);
+    add(3, "E3", 2, 2, 9);
+    add(4, "E4", 4, 3, 10);
+  } else {
+    add(1, "F1", 0, 4, 5);
+    add(2, "F2", 1, 3, 5);
+    add(3, "F3", 2, 2, 6);
+  }
+  return v;
+}
+
 
 
 // Сравнение алгоритмов на 5 наборах. Заголовки по-английски: setw считает байты UTF-8
@@ -389,6 +426,25 @@ for (unsigned seed = 1; seed <= 5; ++seed) {
     }
   }
 }
+
+{
+  std::cout << "\n======================================================\n";
+  std::cout << "ЗАДАНИЕ 12. ТЕСТИРОВАНИЕ EDF (ПЛАНИРОВЩИК РЕАЛЬНОГО ВРЕМЕНИ)\n";
+  std::cout << "======================================================\n";
+
+  std::cout << "Набор E (Допустимый):\n";
+  auto setE = makeDeadlineSet(true);
+  EdfScheduler schedE(setE);
+  runSimulation(schedE);
+  printDeadlines(schedE.processes());
+
+  std::cout << "\nНабор F (Недопустимый):\n";
+  auto setF = makeDeadlineSet(false);
+  EdfScheduler schedF(setF);
+  runSimulation(schedF);
+  printDeadlines(schedF.processes());
+}
+
 
 
   return 0;

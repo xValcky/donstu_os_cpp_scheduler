@@ -9,6 +9,7 @@ add_executable(donstu_os_cpp_scheduler main.cpp
     simulator.cpp
     multicore.cpp
     process.h
+    edf.h
     scheduler.h
     fcfs.h
     sjf.h
