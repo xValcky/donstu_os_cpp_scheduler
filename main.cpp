@@ -15,6 +15,10 @@
 #include <memory>
 #include <string>
 
+// Объявление многоядерного симулятора из multicore.cpp
+SimResult runSimulationMulti(Scheduler& sched, int cores, std::uint64_t maxTicks);
+
+
 // Сравнение алгоритмов на 5 наборах. Заголовки по-английски: setw считает байты UTF-8
 using Factory = std::function<std::unique_ptr<Scheduler>(const std::vector<Process>&)>;
 
@@ -328,6 +332,64 @@ for (unsigned seed = 1; seed <= 5; ++seed) {
   MlfqScheduler mlfq(set);
   saveGanttCsv("results/gantt_mlfq.csv", runSimulation(mlfq));
 }
+{
+  std::cout << "\n======================================================\n";
+  std::cout << "ЧАСТЬ 5. ТЕСТИРОВАНИЕ МНОГОЯДЕРНОГО РЕЖИМА (Задание 7)\n";
+  std::cout << "======================================================\n";
+  std::cout << std::left << std::setw(15) << "Algorithm" 
+            << std::right << std::setw(8) << "Cores"
+            << std::setw(8) << "wait" 
+            << std::setw(8) << "turn" 
+            << std::setw(8) << "resp" 
+            << std::setw(10) << "CPU %" 
+            << std::setw(12) << "Total Ticks" << "\n";
+
+  auto base_set = makeTestSet();
+
+  // Проверяем алгоритмы на 1, 2 и 4 ядрах
+  for (int cores : {1, 2, 4}) {
+    // 1. Тест FCFS
+    {
+      FcfsScheduler sched(base_set);
+      SimResult r = runSimulationMulti(sched, cores);
+      std::cout << std::left << std::setw(15) << "FCFS" 
+                << std::right << std::setw(8) << cores
+                << std::fixed << std::setprecision(2)
+                << std::setw(8) << r.avgWaiting
+                << std::setw(8) << r.avgTurnaround
+                << std::setw(8) << r.avgResponse
+                << std::setw(10) << r.cpuUtilization
+                << std::setw(12) << r.totalTicks << "\n";
+    }
+    // 2. Тест SJF
+    {
+      SjfScheduler sched(base_set);
+      SimResult r = runSimulationMulti(sched, cores);
+      std::cout << std::left << std::setw(15) << "SJF" 
+                << std::right << std::setw(8) << cores
+                << std::fixed << std::setprecision(2)
+                << std::setw(8) << r.avgWaiting
+                << std::setw(8) << r.avgTurnaround
+                << std::setw(8) << r.avgResponse
+                << std::setw(10) << r.cpuUtilization
+                << std::setw(12) << r.totalTicks << "\n";
+    }
+    // 3. Тест SRTN (только для 2 ядер, как просит методичка для проверки)
+    if (cores == 2) {
+      SrtnScheduler sched(base_set);
+      SimResult r = runSimulationMulti(sched, cores);
+      std::cout << std::left << std::setw(15) << "SRTN" 
+                << std::right << std::setw(8) << cores
+                << std::fixed << std::setprecision(2)
+                << std::setw(8) << r.avgWaiting
+                << std::setw(8) << r.avgTurnaround
+                << std::setw(8) << r.avgResponse
+                << std::setw(10) << r.cpuUtilization
+                << std::setw(12) << r.totalTicks << "\n";
+    }
+  }
+}
+
 
   return 0;
 }

@@ -25,9 +25,11 @@ public:
   }
 
   int pickNext(std::uint64_t) override {
-    if (queue_.empty()) return -1;
-    return queue_.front();
-  }
+  if (queue_.empty()) return -1;
+  int pid = queue_.front();
+  queue_.pop_front();
+  return pid;
+}
 
   void onProcessFinished(int pid, std::uint64_t) override {
     Process* p = find(pid);
